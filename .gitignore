@@ -1,0 +1,12 @@
+# laid by Claude Code at every load of the mod
+.claude-plugin/types/
+
+# design working files
+PRODUCT.md
+DESIGN.md
+DESIGN.json
+.impeccable/
+
+.DS_Store
+node_modules/
+docs/figures/*.html

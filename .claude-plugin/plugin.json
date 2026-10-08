@@ -1,0 +1,35 @@
+{
+  "name": "better-agent-messaging",
+  "version": "0.1.0",
+  "description": "Mid-task messaging for Claude Code agent teams: SendMessage reaches a running teammate at its next step, plus hold, standing orders, broadcast and live agent status.",
+  "author": { "name": "Ryan Duff" },
+  "license": "MIT",
+  "keywords": ["agent-teams", "teammates", "subagents", "SendMessage", "mod"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "staleMinutes": {
+      "type": "number",
+      "title": "Stale after (minutes)",
+      "description": "An agent with no step and no tool in flight for this long is reported as stale.",
+      "default": 20
+    },
+    "toolStaleMinutes": {
+      "type": "number",
+      "title": "Long tool after (minutes)",
+      "description": "An agent stuck in one tool call for this long is reported.",
+      "default": 45
+    },
+    "shipPattern": {
+      "type": "string",
+      "title": "Ship actions (regex)",
+      "description": "Extra Bash commands that `hold ship:` refuses, as a regular expression. The built-in list (git push, PR merge, releases, publish, deploy, rm -rf) always applies.",
+      "default": ""
+    },
+    "trace": {
+      "type": "boolean",
+      "title": "Trace",
+      "description": "Write every decision the mod makes to ~/.claude/better-agent-messaging/trace/ for debugging.",
+      "default": false
+    }
+  }
+}

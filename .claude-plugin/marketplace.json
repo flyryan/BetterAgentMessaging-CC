@@ -1,0 +1,15 @@
+{
+  "name": "better-agent-messaging",
+  "description": "Mid-task messaging for Claude Code agent teams.",
+  "owner": {
+    "name": "Ryan Duff"
+  },
+  "plugins": [
+    {
+      "name": "better-agent-messaging",
+      "source": "./",
+      "description": "Mid-task messaging for Claude Code agent teams: SendMessage reaches a working teammate at its next step, with hold, standing orders, broadcast and live agent status.",
+      "version": "0.1.0"
+    }
+  ]
+}
