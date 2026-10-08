@@ -1,6 +1,6 @@
 {
   "name": "better-agent-messaging",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Mid-task messaging for Claude Code agent teams: SendMessage reaches a running teammate at its next step, plus hold, standing orders, broadcast and live agent status.",
   "author": { "name": "Ryan Duff" },
   "license": "MIT",
