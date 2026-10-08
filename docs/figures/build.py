@@ -56,7 +56,7 @@ def proof() -> str:
 
     # the dispatch: team-lead's message at t = 0
     svg.append(f'<line x1="{X(0):.1f}" x2="{X(0):.1f}" y1="{top - 22}" y2="{bottom}" stroke="{AMBER}" stroke-width="2"/>')
-    svg.append(f'<text x="{X(0) + 10:.1f}" y="{top - 28}" class="note" fill="{INK}">team-lead sends '
+    svg.append(f'<text x="{X(0) + 10:.1f}" y="{top - 28}" class="note" fill="{INK}">Claude sends '
                f'<tspan font-weight="600">“Stop after step 4”</tspan></text>')
 
     def run(series, colour, width):
@@ -84,13 +84,13 @@ def proof() -> str:
 
     labels = [
         (X(64), Y(4) + 34, INK, 600, 'With the mod: stops at step 4'),
-        (X(64), Y(4) + 56, '#3D4E66', 400, 'Reads the message at +7 s, between steps 2 and 3'),
+        (X(64), Y(4) + 56, '#3D4E66', 400, 'Reads it at its next step, 7 s later'),
     ]
     for x, y, colour, weight, text in labels:
         svg.append(f'<text x="{x:.1f}" y="{y:.1f}" class="label" font-weight="{weight}" fill="{colour}">{text}</text>')
     for y, colour, weight, text in [
         (Y(10) + 6, '#6E7D93', 600, 'Without the mod: runs all 10 steps'),
-        (Y(10) + 28, '#5B6B82', 400, 'Reads the message at +184 s, after the work is done'),
+        (Y(10) + 28, '#5B6B82', 400, 'Reads it when the task is done, 184 s later'),
     ]:
         svg.append(f'<text x="{X(150):.1f}" y="{y:.1f}" text-anchor="end" class="label" font-weight="{weight}" fill="{colour}">{text}</text>')
 
@@ -105,10 +105,10 @@ svg{{position:absolute;left:0;top:0}}
 .note{{font:400 17px Barlow}}
 .label{{font-family:Barlow;font-size:17px}}
 </style></head><body><div id="fig">
-<h1>Same teammate. Same message. Different outcome.</h1>
-<p>A tmux teammate runs 10 steps, each a 15-second sleep. Mid-run, team-lead tells it to stop after step 4.</p>
+<h1>A busy teammate reads Claude’s message only when its task is done</h1>
+<p>A teammate in its own pane is working through 10 steps. During step 2, Claude tells it to stop after step 4.</p>
 <svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">{"".join(svg)}</svg>
-<div class="p foot">Real runs on Claude Code 2.1.294, 8 Oct 2026. Times come from the lead’s and the teammates’ transcripts, in seconds from the send.</div>
+<div class="p foot">Measured on Claude Code 2.1.294, 8 October 2026. Seconds from the moment Claude sent the message.</div>
 </div></body></html>'''
 
 
@@ -185,8 +185,8 @@ svg{{position:absolute;left:0;top:0}}
 .agent{{font:600 27px "Barlow Condensed";letter-spacing:0.01em}}
 </style></head><body><div id="fig">
 <div class="word">BetterAgent<br>Messaging</div>
-<div class="promise"><b>For Claude Code subagents and agent teams.</b><br>Your message reaches a working teammate at its next step, not after it finishes.</div>
-<div class="verbs"><span>SendMessage</span><span class="hold">hold:</span><span>release</span><span>standing:</span><span>to: "all"</span></div>
+<div class="promise"><b>For Claude Code subagents and agent teams.</b><br>Messages reach a working agent at its next step, not after it finishes.</div>
+<div class="verbs"><span class="hold">hold:</span><span class="hold">hold ship:</span><span>release</span><span>standing:</span></div>
 <svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">{"".join(svg)}</svg>
 </div></body></html>'''
 
