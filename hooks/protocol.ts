@@ -96,30 +96,7 @@ export function forwardedAnswer(answer: string): string {
  * plugin adds for the model is; this notice is the person's copy.
  */
 export function deliveryNotice(from: string, text: string): string {
-  return `${NOTICE_MARK}@${from} sent:\n${text}`
-}
-
-/** Opens this mod's delivery notices, so its InfoNotice hook knows them; drawn as nothing elsewhere. */
-export const NOTICE_MARK = '\u2063'
-
-/** A delivery notice's sender and message, or undefined for any other notice. */
-export function parseNotice(text: string): { from: string; body: string } | undefined {
-  if (!text.startsWith(NOTICE_MARK)) return undefined
-  const match = /^@(.+?) sent:\n([\s\S]*)$/.exec(text.slice(NOTICE_MARK.length))
-  return match === null ? undefined : { from: match[1] ?? '', body: match[2] ?? '' }
-}
-
-// Claude Code's teammate colors, as a terminal draws them.
-const AGENT_COLORS: Record<string, string> = {
-  red: 'red', blue: 'blue', green: 'green', yellow: 'yellow', cyan: 'cyan',
-  purple: 'magenta', orange: '#E9A321', pink: '#F38BA8',
-}
-
-/** A sender's color: its team color, team-lead in Claude's own, anyone else cyan. */
-export function noticeColor(from: string, teamColor?: string): string {
-  const color = teamColor === undefined ? undefined : AGENT_COLORS[teamColor]
-  if (color !== undefined) return color
-  return from === 'team-lead' ? 'claude' : 'cyan'
+  return `${from} sent:\n${text}`
 }
 
 /** The band's line for a message that arrived mid-turn: sender, whether it has been read, its first line. */

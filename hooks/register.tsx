@@ -9,8 +9,6 @@ import {
   CONTROLLER_SECTION,
   controllerAlias,
   deliveryNotice,
-  noticeColor,
-  parseNotice,
   deliveryText,
   extractStanding,
   forwardedAnswer,
@@ -325,33 +323,6 @@ async function markRead($: EngineInterface): Promise<void> {
   })
 }
 
-// Each team's colors by member name, as Claude Code records them in the team's config.
-const teamColors = new Map<string, Record<string, string>>()
-
-/** The color a sender's notice is drawn in: its team color where the team records one. */
-async function senderColor($: EngineInterface, from: string): Promise<string> {
-  if (from === 'team-lead') return noticeColor(from)
-  let team = role.kind === 'teammate' ? role.team : undefined
-  if (team === undefined) {
-    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
-    team = agents.find(a => isPane(a) && a.id.split('@')[0] === from)?.id.split('@')[1]
-  }
-  if (team === undefined || team === '') return noticeColor(from)
-  if (teamColors.get(team)?.[from] === undefined) {
-    try {
-      const config = JSON.parse(String(await $.fs.read(`${home}/.claude/teams/${team}/config.json`))) as {
-        members?: { name?: string; color?: string }[]
-      }
-      const colors: Record<string, string> = {}
-      for (const m of config.members ?? []) if (m.name !== undefined && m.color !== undefined) colors[m.name] = m.color
-      teamColors.set(team, colors)
-    } catch {
-      return noticeColor(from)
-    }
-  }
-  return noticeColor(from, teamColors.get(team)?.[from])
-}
-
 /**
  * The lead's directives as a note in its conversation, where its system prompt
  * is out of reach. A conversation that already holds one (this mod reloaded, the
@@ -607,26 +578,6 @@ export const register: Register = (on, options) => {
             {rowLine(row, now)}
           </Text>
         ))}
-      </Box>
-    )
-  })
-
-  // A delivery notice, drawn as Claude Code draws a teammate's message: the
-  // sender's name in its color, the message beneath.
-  on('ui.render', { component: 'InfoNotice' }, async ($, e, next) => {
-    const notice = parseNotice(e.props.text)
-    if (notice === undefined) return next(e)
-    const color = await senderColor($, notice.from)
-    const { Box, Text } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        <Text>
-          <Text color={color} bold>{`@${notice.from}`}</Text>
-          <Text dimColor> sent mid-task</Text>
-        </Text>
-        <Box paddingLeft={2}>
-          <Text>{notice.body}</Text>
-        </Box>
       </Box>
     )
   })

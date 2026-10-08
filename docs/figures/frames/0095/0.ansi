@@ -1,0 +1,48 @@
+[48;5;237m  [38;5;231mnever retries or works around a refusal. [39m   
+  [38;5;231mKeep both teammates open when they finish. [39m 
+  [38;5;231mDo not send the teammates anything after [39m   
+  [38;5;231mspawning them until I ask you to: I will [39m   
+  [38;5;231mtell you what to send.[39m                      
+
+[38;5;114m[49m⏺[39m [1m2[0m background agents launched [38;5;246m(↓[39m [38;5;246mto[39m [38;5;246mmanage)[39m  
+   [38;5;246m├[39m [1m@impl[0m 
+   [38;5;246m└[39m [1m@review[0m           
+
+[38;5;231m⏺[39m I've noted the messaging directives. I'm not
+  sending [38;5;153mimpl[39m or [38;5;153mreview[39m anything until you   
+  tell me what to send. Both are running their
+  steps, and I'll wait for their reports.     
+
+[38;5;246m[48;5;237m❯ [38;5;231mSendMessage to review with exactly this [39m    
+  [38;5;231mtext, nothing more: hold ship: QA hasn't [39m   
+  [38;5;231msigned off[39m                                  
+[49m                                              
+[38;5;231m⏺[39m I sent [38;5;153mreview[39m the ship hold, [38;5;153mhold ship: QA [39m 
+  [38;5;153mhasn't signed off[39m, and the send succeeded.  
+  I'm still waiting on the reports from [38;5;153mimpl[39m  
+  and [38;5;153mreview[39m, and I won't message either one  
+  again until you say so.                     
+
+[38;5;246m[48;5;237m❯ [38;5;231mSendMessage to impl with exactly this text,[39m 
+  [38;5;231mnothing more: also write DONE to impl.log [39m  
+  [38;5;231mafter your last step[39m                        
+[49m                                              
+[38;5;231m⏺[39m I sent [38;5;153mimpl[39m the message [38;5;153malso write DONE to [39m 
+  [38;5;153mimpl.log after your last step[39m, and the send 
+  succeeded. I'm still waiting on the reports 
+  from both teammates, and I won't message    
+  either one again until you say so.          
+[38;5;246mreview can't ship: QA hasn't signed off[39m   [38;5;246m[-][39m 
+
+[38;5;244m──────────────────────────────────────────────
+[39m❯ [2mSendMessage to review with exactly this tex…
+[0m[38;5;244m──────────────────────────────────────────────
+[39m  [2m[38;5;246mSonnet 5.5  ·  acme-api  ·  main[0m            
+  [38;5;220m⏵⏵ auto mode on[38;5;246m (shift+tab to cycle) · ← …[39m  
+                                              
+[1m  ⏺ main[0m                                      
+[38;5;246m  ◯ impl[39m    [38;5;246mimpl teammate steps[39m       [38;5;246m1m 25s[39m  
+[38;5;246m  ◯ review[39m  [38;5;246mreview teammate steps an…[39m [38;5;246m1m 25s[39m  
+
+
+

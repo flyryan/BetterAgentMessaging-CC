@@ -1,3 +1,0 @@
-%0 0 0 46 48 ✳ Ship hold push refusal demo
-%1 47 0 73 17 ✳ general-purpose
-%2 47 18 73 30 ✳ general-purpose

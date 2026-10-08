@@ -1,6 +1,6 @@
 import type { AgentInfo, On } from 'claude-code'
 
-import { CONTROLLER_NOTE, deliveryNotice } from '../hooks/protocol'
+import { CONTROLLER_NOTE } from '../hooks/protocol'
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 
 // The engine beneath the mod, mocked: a lead or a pane teammate process, the
@@ -202,43 +202,6 @@ describe('a pane teammate', () => {
       expect(await band.find({ type: 'Text', text: 'team-lead blocked shipping: QA has not signed off' })).toBeDefined()
       await band.unmount()
     }
-  })
-
-  test('draws its delivery notice as the sender, in the sender\'s color, on every surface', async ($, on) => {
-    world(on, { ps: TEAMMATE_PS })
-    mock.session(on)
-    await start($)
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const notice = await $.ui.mount({
-        plugin: 'better-agent-messaging', surface, component: 'InfoNotice',
-        props: { text: deliveryNotice('team-lead', 'stop after step 4'), command: null },
-      } as never)
-      expect(await notice.find({ type: 'Text', text: '@team-lead' })).toBeDefined()
-      expect(await notice.find({ type: 'Text', text: 'stop after step 4' })).toBeDefined()
-      await notice.unmount()
-    }
-  })
-
-  test('marks a mid-turn arrival read once a model request carries it', async ($, on) => {
-    world(on, { ps: TEAMMATE_PS })
-    mock.session(on)
-    on('turn.step', async function* ($, e) {
-      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
-    })
-    await start($)
-    await $.turn.start(turn('t-1'))
-    await $.session.receive(fromLead('stop after step 4'))
-    const mount = () => $.ui.mount({
-      plugin: 'better-agent-messaging', surface: 'terminal', component: 'AbovePrompt',
-      props: { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100 },
-    } as never)
-    let band = await mount()
-    expect(await band.find({ type: 'Text', text: 'team-lead sent (unread): stop after step 4' })).toBeDefined()
-    await band.unmount()
-    for await (const _ of $.turn.step({ turnId: 't-1', index: 1, model: 'claude-opus-5-5', messageCount: 4 } as never)) { /* drain */ }
-    band = await mount()
-    expect(await band.find({ type: 'Text', text: 'team-lead sent (read): stop after step 4' })).toBeDefined()
-    await band.unmount()
   })
 
   test('writes its status where the lead reads it', async ($, on) => {

@@ -63,13 +63,13 @@ There is nothing to set up. Ask Claude in plain language, for example "hold the 
 A message to `all` reaches every running or idle agent.
 
 <p align="center">
-  <img src="docs/images/team-window.png" width="100%" alt="A tmux window with three Claude Code panes. Left, Claude as team-lead, which has just sent two messages mid-task; above its prompt one dim line reads: review can't ship: QA hasn't signed off. Top right, teammate impl, on step 4 of 8; above its prompt: team-lead sent: also write DONE to impl.log after your last step. Bottom right, teammate review, on check 4; above its prompt: team-lead sent: hold ship: QA hasn't signed off, and below it, team-lead blocked shipping: QA hasn't signed off.">
+  <img src="docs/images/team-window.png" width="100%" alt="A tmux window with three Claude Code panes. Left, Claude as team-lead, which has just sent two messages mid-task; above its prompt one dim line reads: review can't ship: QA hasn't signed off. Top right, teammate impl, on step 4 of 8; above its prompt: team-lead sent (unread): also write DONE to impl.log after your last step. Bottom right, teammate review, on check 4; above its prompt: team-lead sent (unread): hold ship: QA hasn't signed off, and below it, team-lead blocked shipping: QA hasn't signed off.">
 </p>
 
 The line above each prompt shows what is not visible elsewhere: a mid-task message until it is read (`team-lead sent (unread): …`, then `(read)` for 15 seconds), a teammate's own hold (`team-lead blocked shipping: …`), and in Claude's pane any agent that is paused or stuck (`review can't ship: …`, `impl looks stuck: in Bash for 47m`). `team-lead` is Claude's name in its team.
 
 <p align="center">
-  <img src="docs/images/ship-hold.png" width="602" alt="Teammate review's pane. It runs git push origin main once, and the harness refuses it: Error: On a ship hold by team-lead: QA hasn't signed off. Pushing, merging, releasing, publishing, deploying and rm -rf are refused until team-lead sends release. Other work may continue. review reports the refusal and does not retry. Above its prompt: team-lead blocked shipping: QA hasn't signed off.">
+  <img src="docs/images/ship-hold.png" width="664" alt="Teammate review's pane. It runs git push origin main once, and the harness refuses it: Error: On a ship hold by team-lead: QA hasn't signed off. Pushing, merging, releasing, publishing, deploying and rm -rf are refused until team-lead sends release. Other work may continue. review reports the refusal and stops without retrying. Above its prompt: team-lead blocked shipping: QA hasn't signed off.">
 </p>
 
 A push attempted under `hold ship:` is refused by Claude Code.

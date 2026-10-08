@@ -1,0 +1,30 @@
+
+[38;5;246m› Message from @team-lead (ctrl+o to expand)[39m                                     
+
+[38;5;211m⏺[39m [1mBash[0m(git push origin main)                                                     
+[38;5;246m  ⎿  [38;5;211mError: On a ship hold by team-lead: QA hasn't signed off. Pushing, merging, 
+[39m     [38;5;211mreleasing, publishing, deploying and rm -rf are refused until team-lead [39m    
+     [38;5;211msends "release". Other work may continue.[39m                                   
+
+[38;5;231m⏺[39m The push was refused due to an active hold from team-lead pending QA sign-off, 
+  so I'm stopping rather than retrying. Steps 1-4 are complete and logged in     
+  [38;5;153mreview.log[39m — send "release" to lift the hold and allow the push.[38;5;239m · summary[39m     
+
+[38;5;231m⏺[39m The push was refused, and I've stopped and told team-lead.                     
+
+  I ran [38;5;153mgit push origin main[39m once. The refusal read: "On a ship hold by          
+  team-lead: QA hasn't signed off. Pushing, merging, releasing, publishing,      
+  deploying and rm -rf are refused until team-lead sends "release"."             
+
+  Steps 1-4 are done, with check 1 to check 4 in [38;5;153mreview.log[39m. The push goes       
+  through only after team-lead sends "release".                                  
+
+[38;5;246m✻[39m [38;5;246mCogitated for 38s · done[39m [38;5;246m4:40 PM[39m                                               
+[38;5;246mteam-lead[39m [38;5;246mblocked[39m [38;5;246mshipping:[39m [38;5;246mQA[39m [38;5;246mhasn't[39m [38;5;246msigned[39m [38;5;246moff[39m                             [38;5;246m[-][39m 
+
+[38;5;35m───────────────────────────────────────────────────────────────────────[38;5;16m[48;5;35m @review [38;5;35m[49m─
+❯ [39m                  
+[38;5;35m─────────────────────────────────────────────────────────────────────────────────
+[39m  [2m[38;5;246mSonnet[0m [2m[38;5;246m5.5[0m  [2m[38;5;246m·[0m  [2m[38;5;246macme-api[0m  [2m[38;5;246m·[0m  [2m[38;5;246mmain[0m      
+  [38;5;220m⏵⏵[39m [38;5;220mauto[39m [38;5;220mmode[39m [38;5;220mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246m←[39m [38;5;246mfor[39m [38;5;246magents[39m                            
+

@@ -99,19 +99,20 @@ chrome-devtools-axi screenshot docs/images/before-after.png
 
 `hero.html` renders the same way to `hero.png`, at 1600x540.
 
-**The two terminal screenshots** are real tmux frames from a separate demo run on 8 October 2026 (Claude Code 2.1.294, Sonnet 5.5). A lead and two pane teammates, `impl` and `review`, ran in a throwaway repo whose `origin` was a local bare repository. A capture loop saved every pane with `tmux capture-pane -e` once a second. [`ansi2html.py`](figures/ansi2html.py) draws a saved frame as HTML: each pane at its own position, with its colours. The two frames used are in [`docs/figures/frames`](figures/frames).
+**The two terminal screenshots** are real tmux frames from a separate demo run on 8 October 2026 (Claude Code 2.1.295, Sonnet 5.5, the mod at 0.2.0). A lead and two pane teammates, `impl` and `review`, ran in a throwaway repo whose `origin` was a local bare repository. A capture loop saved every pane with `tmux capture-pane -e` once a second. [`ansi2html.py`](figures/ansi2html.py) draws a saved frame as HTML: each pane at its own position, with its colours. The two frames used are in [`docs/figures/frames`](figures/frames).
 
 ```sh
-python3 docs/figures/ansi2html.py docs/figures/frames/0089 docs/figures/team-window.html --crop-trailing --margin 0
-python3 docs/figures/ansi2html.py docs/figures/frames/0133 docs/figures/ship-hold.html --pane 2 --crop-trailing --margin 0
+python3 docs/figures/ansi2html.py docs/figures/frames/0095 docs/figures/team-window.html --crop-trailing --margin 0
+python3 docs/figures/ansi2html.py docs/figures/frames/0172 docs/figures/ship-hold.html --pane 2 --crop-trailing --margin 0
 ```
 
-Then screenshot each page as above: `team-window.html` at `968x882x2`, `ship-hold.html` at `602x566x2`. `--margin 0` draws the bare window, with no page around it.
+Then screenshot each page as above: `team-window.html` at `1031x882x2`, `ship-hold.html` at `664x566x2`. `--margin 0` draws the bare window, with no page around it.
 
 What was arranged for the recording:
 
 - The demo processes loaded a copy of the mod, with no personal settings or instructions (`--setting-sources project,local`).
-- Before the first message, the lead's pane was widened to 46 columns, so its line above the prompt would fit. Nothing was resized after that.
-- The lead was told to send the two messages word for word, about five seconds apart, so all four lines above the prompts would be on screen together (frame 0089, 15:38:52).
-- Under the hold, `review` skipped the push on its own. The lead then asked it to run the push once so the hold could decide. The harness refused it (frame 0133, 15:39:39), and the remote did not move.
+- The window was 128 columns wide. Before the first message, the lead's pane was set to 46 columns and each teammate's to 81, so every line above a prompt would fit. Nothing was resized after that.
+- The lead was told to send the two messages word for word, about five seconds apart, so all four lines above the prompts would be on screen together, both messages still unread (frame 0095, 16:39:24).
+- Under the hold, `review` skipped the push on its own. The lead then asked it to run the push once so the hold could decide. The harness refused it (frame 0172, 16:40:47), and the remote did not move.
+- In frame 0095 the top two rows of `review`'s pane held the end of Claude Code's welcome banner, which names the account's plan and a local path. Those two rows are cleared in the saved frame; nothing else in either frame was changed.
 

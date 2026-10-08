@@ -1,0 +1,48 @@
+  push, [38;5;153mreview[39m has to issue the push itself.  
+  It won't do that while it's holding for a   
+  [38;5;153mrelease[39m. Tell me what to send, for example a
+  [38;5;153mrelease[39m followed by an instruction to run   
+  step 5. The ship hold would still be in     
+  force on the hook side, if the mod enforces 
+  it separately from the message.             
+
+[38;5;246m[48;5;237m❯ [38;5;231mSendMessage to review with exactly this [39m    
+  [38;5;231mtext, nothing more: Run git push origin [39m    
+  [38;5;231mmain once now so the mod's hook can decide.[39m 
+  [38;5;231mIf it is refused, report the refusal and [39m   
+  [38;5;231mstop; do not retry or work around it.[39m       
+[49m                                              
+[38;5;231m⏺[39m I sent [38;5;153mreview[39m the instruction to run [38;5;153mgit [39m   
+  [38;5;153mpush origin main[39m once. The send succeeded.  
+  If the hook refuses the push, [38;5;153mreview[39m should 
+  report the refusal and stop. I'm waiting on 
+  that report and on [38;5;153mimpl[39m's, and I won't      
+  message either one again until you say so.  
+
+
+[38;5;246m› Message from @review (ctrl+o to expand)[39m     
+
+[38;5;231m⏺[39m The hook refused the push, which is what the
+  demo was meant to show. [38;5;153mreview[39m ran [38;5;153mgit push[39m 
+  [38;5;153morigin main[39m once and did not retry. It      
+  stopped after the refusal and reported this 
+  message: 
+
+  [2m▎[0m [3mOn a ship hold by team-lead: QA hasn't [0m   
+  [2m▎[0m [3msigned off. Pushing, merging, releasing, [0m 
+  [2m▎[0m [3mpublishing, deploying and rm -rf are [0m     
+  [2m▎[0m [3mrefused until team-lead sends "release".[0m  
+
+  [38;5;153mreview[39m finished checks 1-4, which are in    
+[38;5;246mreview can't ship: QA hasn't signed off[39m   [38;5;246m[-][39m 
+                                              
+[38;5;244m──────────────────────────────────────────────
+[38;5;246m❯ [39m                                            
+[38;5;244m──────────────────────────────────────────────
+[39m  [2m[38;5;246mSonnet 5.5  ·  acme-api  ·  main[0m            
+  [38;5;220m⏵⏵[39m [38;5;220mauto[39m [38;5;220mmode[39m [38;5;220mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246m←[39m [38;5;246m…[39m  
+
+[1m [0m [1m⏺[0m [1mmain[0m   
+[38;5;246m [39m [38;5;246m◯[39m [38;5;246mimpl[39m    [38;5;246mimpl[39m [38;5;246mteammate[39m [38;5;246msteps[39m       [38;5;246m2m[39m [38;5;246m47s[39m  
+[38;5;246m [39m [38;5;246m◯[39m [38;5;246mreview[39m  [38;5;246mreview[39m [38;5;246mteammate[39m [38;5;246msteps[39m [38;5;246man…[39m [38;5;246m2m[39m [38;5;246m47s[39m  
+

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { gateVerdict, shipMatcher } from '../hooks/gate'
-import { arrivalLine, controllerAlias, deliveryNotice, deliveryText, heldLine, extractStanding, isProtocolJson, NOTICE_MARK, noticeColor, parseNotice, parseVerb, spawnProtocol } from '../hooks/protocol'
+import { arrivalLine, controllerAlias, deliveryNotice, deliveryText, heldLine, extractStanding, isProtocolJson, parseVerb, spawnProtocol } from '../hooks/protocol'
 import { parseRole } from '../hooks/role'
 import { alertLines, staleness } from '../hooks/table'
 
@@ -123,20 +123,8 @@ describe('roles and rows', () => {
     expect(alertLines(rows, 0)).toEqual(['a is paused: r', 'b is paused: r', 'and 3 more paused or stuck: see /agent-status'])
   })
 
-  test('a delivery notice names its sender for the drawing and reads plainly without it', () => {
-    const text = deliveryNotice('team-lead', 'stop after step 4\nthanks')
-    expect(text.startsWith(NOTICE_MARK)).toBe(true)
-    expect(text.slice(NOTICE_MARK.length)).toBe('@team-lead sent:\nstop after step 4\nthanks')
-    expect(parseNotice(text)).toEqual({ from: 'team-lead', body: 'stop after step 4\nthanks' })
-    expect(parseNotice('@impl sent:\nnot this mod\'s notice')).toBeUndefined()
-  })
-
-  test('a sender is drawn in its team color; team-lead in Claude\'s', () => {
-    expect(noticeColor('team-lead')).toBe('claude')
-    expect(noticeColor('impl', 'green')).toBe('green')
-    expect(noticeColor('impl', 'purple')).toBe('magenta')
-    expect(noticeColor('impl', 'orange')).toMatch(/^#/)
-    expect(noticeColor('impl', undefined)).toBe('cyan')
+  test('a delivery notice names its sender, then the whole message', () => {
+    expect(deliveryNotice('team-lead', 'stop after step 4\nthanks')).toBe('team-lead sent:\nstop after step 4\nthanks')
   })
 
   test('arrival and hold lines are one short line each', () => {
