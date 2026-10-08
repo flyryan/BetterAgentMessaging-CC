@@ -46,7 +46,7 @@ Without the mod, the teammate read the message 184 seconds after it was sent, on
 
 ## Use it
 
-Send messages exactly as before. A teammate that is working gets your message at its next step, framed so it knows it came from you mid-task and that it outranks its original brief. Your teammates' reports land in your turn while you are still working. You see it arrive too: for 45 seconds, a line directly above the pane's prompt shows who sent it and its first line, such as `team-lead sent: stop after step 4`, and the transcript keeps the whole message under the sender's name in its team color, the way Claude Code shows a teammate's message.
+Send messages exactly as before. A teammate that is working gets your message at its next step, framed so it knows it came from you mid-task and that it outranks its original brief. Your teammates' reports land in your turn while you are still working. You see it arrive too: a line directly above the pane's prompt shows who sent it, whether the agent has read it yet, and its first line, such as `team-lead sent (unread): stop after step 4`. It says `(read)` once the agent's next model request carries the message, then clears 15 seconds later. The transcript keeps the whole message under the sender's name in its team color, the way Claude Code shows a teammate's message.
 
 ### Directives
 
@@ -75,7 +75,7 @@ The lead learns these directives without being told. The mod adds a short sectio
   <img src="docs/images/team-window.png" width="100%" alt="A tmux window with three Claude Code panes. Left, the lead, which has just sent two messages mid-task; above its prompt one dim line reads: review can't ship: QA hasn't signed off. Top right, teammate impl, on step 4 of 8; above its prompt: team-lead sent: also write DONE to impl.log after your last step. Bottom right, teammate review, on check 4; above its prompt: team-lead sent: hold ship: QA hasn't signed off, and below it, team-lead blocked shipping: QA hasn't signed off.">
 </p>
 
-- **Above the prompt**, a dim line appears only when there is something Claude Code's own agent list doesn't show, always led by the agent's name: `review can't ship: QA hasn't signed off`, `docs is paused: waiting for review`, `impl looks stuck: in Bash for 47m`. A held teammate's own pane shows its hold the same way (`team-lead blocked shipping: …`), and any pane shows a message that just arrived mid-turn (`impl sent: tests pass, opening the PR`).
+- **Above the prompt**, a dim line appears only when there is something Claude Code's own agent list doesn't show, always led by the agent's name: `review can't ship: QA hasn't signed off`, `docs is paused: waiting for review`, `impl looks stuck: in Bash for 47m`. A held teammate's own pane shows its hold the same way (`team-lead blocked shipping: …`), and any pane shows a message that arrived mid-turn until it has been read (`impl sent (unread): tests pass, opening the PR`).
 - **ListAgents** results gain a live-state table. When the lead lists its agents, it sees what each one is doing.
 - **`/agent-status`** opens the same table in a pane.
 - **Stale agents** are reported to the lead on their own. An agent counts as stale after 20 minutes with no step and no tool running, or after 45 minutes inside a single tool call. Both times are configurable.

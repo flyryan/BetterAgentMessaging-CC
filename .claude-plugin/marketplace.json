@@ -9,7 +9,7 @@
       "name": "better-agent-messaging",
       "source": "./",
       "description": "Mid-task messaging for Claude Code agent teams: SendMessage reaches a working teammate at its next step, with hold, standing orders, broadcast and live agent status.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

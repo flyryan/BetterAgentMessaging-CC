@@ -23,8 +23,11 @@ export type TeammateStatus = {
   updatedAt: number
 }
 
-/** The last message put into this process's running turn, shown in the band for a while. */
-export type Arrival = { from: string; text: string; at: number }
+/**
+ * The last message put into this process's running turn, shown in the band:
+ * unread until a model request carries it (`readAt`), then briefly as read.
+ */
+export type Arrival = { from: string; text: string; at: number; readAt?: number }
 
 /** One agent as the lead shows it: ListAgents context, the /relay pane. */
 export type AgentRow = {

@@ -140,8 +140,9 @@ describe('roles and rows', () => {
   })
 
   test('arrival and hold lines are one short line each', () => {
-    expect(arrivalLine('team-lead', 'hold ship: QA first\nmore detail')).toBe('team-lead sent: hold ship: QA first')
-    expect(arrivalLine('impl', 'x'.repeat(300)).length).toBeLessThan(220)
+    expect(arrivalLine('team-lead', 'hold ship: QA first\nmore detail', false)).toBe('team-lead sent (unread): hold ship: QA first')
+    expect(arrivalLine('team-lead', 'hold ship: QA first', true)).toBe('team-lead sent (read): hold ship: QA first')
+    expect(arrivalLine('impl', 'x'.repeat(300), false).length).toBeLessThan(220)
     expect(heldLine({ scope: 'ship', reason: 'QA first', by: 'team-lead', at: 0 })).toBe('team-lead blocked shipping: QA first')
     expect(heldLine({ scope: 'all', reason: 'QA first', by: 'team-lead', at: 0 })).toBe('team-lead paused this agent: QA first')
   })

@@ -122,10 +122,10 @@ export function noticeColor(from: string, teamColor?: string): string {
   return from === 'team-lead' ? 'claude' : 'cyan'
 }
 
-/** The band's line for a message that just arrived mid-turn: sender, then its first line. */
-export function arrivalLine(from: string, text: string): string {
+/** The band's line for a message that arrived mid-turn: sender, whether it has been read, its first line. */
+export function arrivalLine(from: string, text: string, isRead: boolean): string {
   const first = text.trim().split('\n')[0] ?? ''
-  return `${from} sent: ${first.length > 160 ? `${first.slice(0, 159)}…` : first}`
+  return `${from} sent (${isRead ? 'read' : 'unread'}): ${first.length > 160 ? `${first.slice(0, 159)}…` : first}`
 }
 
 /** The band's line in a held teammate's own pane. */

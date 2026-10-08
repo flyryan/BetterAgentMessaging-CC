@@ -45,8 +45,8 @@ const standingAtom = atom({ plugin: 'better-agent-messaging', key: 'standing' } 
 const rowsAtom = atom({ plugin: 'better-agent-messaging', key: 'rows' } as const, [])
 const turnAtom = atom({ plugin: 'better-agent-messaging', key: 'isTurnRunning' } as const, false)
 const arrivalAtom = atom({ plugin: 'better-agent-messaging', key: 'arrival' } as const, null)
-// How long an arrival stays in the band.
-const ARRIVAL_MS = 45_000
+// How long a read arrival stays in the band; an unread one stays until it is read.
+const READ_MS = 15_000
 
 type Activity = { tool?: string; toolSince?: number; lastActivity: number; inFlight: number }
 
@@ -315,6 +315,16 @@ async function refresh($: EngineInterface, thresholds: { staleMs: number; toolSt
   return rows
 }
 
+/** The band's arrival, read now that a model request carries it; it clears a little later. */
+async function markRead($: EngineInterface): Promise<void> {
+  const arrival = await read($, arrivalAtom)
+  if (arrival === null || arrival.readAt !== undefined) return
+  await update($, arrivalAtom, last => (last !== null && last.at === arrival.at ? { ...last, readAt: Date.now() } : last))
+  $.clock.after(READ_MS, () => {
+    void update($, arrivalAtom, last => (last !== null && last.at === arrival.at ? null : last))
+  })
+}
+
 // Each team's colors by member name, as Claude Code records them in the team's config.
 const teamColors = new Map<string, Record<string, string>>()
 
@@ -342,8 +352,17 @@ async function senderColor($: EngineInterface, from: string): Promise<string> {
   return noticeColor(from, teamColors.get(team)?.[from])
 }
 
-/** The lead's directives as a note in its conversation, where its system prompt is out of reach. */
-async function teachByNote($: EngineInterface): Promise<void> {
+/**
+ * The lead's directives as a note in its conversation, where its system prompt
+ * is out of reach. A conversation that already holds one (this mod reloaded, the
+ * session resumed) gets no second; after a compaction it has none, so it gets one.
+ */
+async function teachByNote($: EngineInterface, isAfterCompaction: boolean): Promise<void> {
+  if (!isAfterCompaction) {
+    const head = CONTROLLER_NOTE.split('\n')[0] ?? ''
+    const messages = await $.session.messages().catch(() => [])
+    if (Array.isArray(messages) && messages.some(m => m.role === 'user' && m.text.startsWith(head))) return
+  }
   const message = { type: 'user' as const, content: [{ type: 'text' as const, text: CONTROLLER_NOTE }] }
   await $.session.append({ message }).catch(() => undefined)
   trace($, 'taught by note', {})
@@ -465,9 +484,6 @@ export const register: Register = (on, options) => {
     // in the detailed transcript (ctrl+o).
     const at = Date.now()
     await update($, arrivalAtom, () => ({ from, text: e.text, at }))
-    $.clock.after(ARRIVAL_MS, () => {
-      void update($, arrivalAtom, last => (last !== null && last.at === at ? null : last))
-    })
     await $.session
       .append({ message: { type: 'system', content: [{ type: 'text', text: deliveryNotice(from, e.text) }] } })
       .catch(() => undefined)
@@ -486,7 +502,7 @@ export const register: Register = (on, options) => {
       // Compose once to learn whether this mod's prompt.compose hook runs here.
       if (!hasComposed) await $.prompt.compose(COMPOSE_PROBE).catch(() => undefined)
       teaching = hasComposed ? 'prompt' : 'note'
-      if (teaching === 'note') await teachByNote($)
+      if (teaching === 'note') await teachByNote($, false)
     }
     return next(e)
   })
@@ -494,7 +510,10 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     bump(e.agentId ?? 'main')
     // This request carries every row appended before it.
-    if (e.agentId === undefined) pending = []
+    if (e.agentId === undefined) {
+      pending = []
+      await markRead($)
+    }
     return yield* next(e)
   })
 
@@ -554,7 +573,7 @@ export const register: Register = (on, options) => {
   on('session.compact', async ($, e, next) => {
     const compacted = await next(e)
     if (compacted.skip !== undefined || e.trigger === 'precompute') return compacted
-    if (e.agentId === undefined && teaching === 'note') await teachByNote($)
+    if (e.agentId === undefined && teaching === 'note') await teachByNote($, true)
     const rules = e.agentId === undefined
       ? role.kind === 'teammate' ? standing.main ?? [] : []
       : [...(standing['*'] ?? []), ...(standing[e.agentId] ?? [])]
@@ -619,7 +638,9 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey) return next(e)
     const arrival = await read($, arrivalAtom)
     const lines: string[] = []
-    if (arrival !== null && Date.now() - arrival.at < ARRIVAL_MS) lines.push(arrivalLine(arrival.from, arrival.text))
+    if (arrival !== null && (arrival.readAt === undefined || Date.now() - arrival.readAt < READ_MS)) {
+      lines.push(arrivalLine(arrival.from, arrival.text, arrival.readAt !== undefined))
+    }
     if (role.kind === 'teammate') {
       const hold = (await read($, holdsAtom)).main
       if (hold !== undefined) lines.push(heldLine(hold))
