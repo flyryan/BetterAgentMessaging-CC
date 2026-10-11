@@ -53,7 +53,30 @@ export function isProtocolJson(text: string): boolean {
   }
 }
 
+/**
+ * An engine idle notice's sender and age, for one the lead receives late: the
+ * engine can leave a stopped teammate's last idle notice (its whole final
+ * answer) unread in the inbox, and hands it over at the next spawn, hours on.
+ */
+export function idleNotice(text: string, now: number): { from: string; ageMs: number } | undefined {
+  if (!isProtocolJson(text)) return undefined
+  const parsed = JSON.parse(text.trim()) as { type?: unknown; from?: unknown; timestamp?: unknown }
+  if (parsed.type !== 'idle_notification' || typeof parsed.from !== 'string' || typeof parsed.timestamp !== 'string') return undefined
+  const at = Date.parse(parsed.timestamp)
+  return Number.isNaN(at) ? undefined : { from: parsed.from, ageMs: now - at }
+}
+
 const escapeAttr = (s: string) => s.replace(/[&"<>]/g, c => `&#${c.charCodeAt(0)};`)
+
+/**
+ * A teammate message in the engine's own frame, as the model reads one
+ * delivered between turns. Submitted alone as a prompt, the frame is drawn as
+ * Claude Code draws a teammate's message, the name in `color` (the team's).
+ */
+export function teammateFrame(from: string, text: string, color?: string): string {
+  const tint = color === undefined ? '' : ` color="${escapeAttr(color)}"`
+  return [`<teammate-message teammate_id="${escapeAttr(from)}"${tint}>`, text, '</teammate-message>'].join('\n')
+}
 
 /** A teammate message that arrived while the turn ran, as the turn reads it. */
 export function deliveryText(from: string, text: string): string {
@@ -61,9 +84,7 @@ export function deliveryText(from: string, text: string): string {
     ? ' It comes from your controller and outranks your original brief where they conflict.'
     : ''
   return [
-    `<teammate-message teammate_id="${escapeAttr(from)}">`,
-    text,
-    '</teammate-message>',
+    teammateFrame(from, text),
     '<system-reminder>',
     `${from} sent the message above while you were working. Read it now and address it before you finish your current task.${outranks}`,
     '</system-reminder>',
@@ -99,10 +120,10 @@ export function deliveryNotice(from: string, text: string): string {
   return `${from} sent:\n${text}`
 }
 
-/** The band's line for a message that arrived mid-turn: sender, whether it has been read, its first line. */
-export function arrivalLine(from: string, text: string, isRead: boolean): string {
+/** The band's line for a message that arrived mid-turn, after the sender's name: whether it has been read, its first line. */
+export function arrivalLine(text: string, isRead: boolean): string {
   const first = text.trim().split('\n')[0] ?? ''
-  return `${from} sent (${isRead ? 'read' : 'unread'}): ${first.length > 160 ? `${first.slice(0, 159)}…` : first}`
+  return ` sent (${isRead ? 'read' : 'unread'}): ${first.length > 160 ? `${first.slice(0, 159)}…` : first}`
 }
 
 /** The band's line in a held teammate's own pane. */
@@ -110,10 +131,13 @@ export function heldLine(hold: Hold): string {
   return `${hold.by} ${hold.scope === 'ship' ? 'blocked shipping' : 'paused this agent'}: ${hold.reason.split('\n')[0]}`
 }
 
-/** The prompt that starts a turn when a delivery landed after the turn's last step. */
-export function nudgeText(froms: readonly string[]): string {
-  const who = [...new Set(froms)].join(', ')
-  return `${who} sent you a message just as you finished your last step, so you have not read it yet. It is in the conversation above: read it and address it now.`
+/**
+ * The prompt that wakes an idle agent for the messages its last turn did not
+ * read: each in the engine's own frame, as the engine would have delivered it
+ * after the turn, so it is drawn as a teammate's message and not a plugin's.
+ */
+export function wakeText(messages: readonly { from: string; text: string; color?: string }[]): string {
+  return messages.map(m => teammateFrame(m.from, m.text, m.color)).join('\n')
 }
 
 /** Standing orders put back after a compaction, or listed in a brief. */

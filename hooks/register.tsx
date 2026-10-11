@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, SessionSendResult } from 'claude-code'
 
-import type { AgentRow, Hold, TeammateStatus } from '../types'
+import type { AgentRow, Delivery, Hold, TeammateStatus } from '../types'
 import { gateVerdict, shipMatcher } from './gate'
 import {
   arrivalLine,
@@ -13,14 +13,16 @@ import {
   extractStanding,
   forwardedAnswer,
   heldLine,
+  idleNotice,
   isBroadcast,
   isProtocolJson,
-  nudgeText,
   parseVerb,
   spawnProtocol,
   standingBlock,
   staleText,
+  teammateFrame,
   type Verb,
+  wakeText,
 } from './protocol'
 import { parseRole, ROLE_WALK, type Role } from './role'
 import { agentTable, alertLines, rowLine, staleness } from './table'
@@ -43,6 +45,10 @@ const standingAtom = atom({ plugin: 'better-agent-messaging', key: 'standing' } 
 const rowsAtom = atom({ plugin: 'better-agent-messaging', key: 'rows' } as const, [])
 const turnAtom = atom({ plugin: 'better-agent-messaging', key: 'isTurnRunning' } as const, false)
 const arrivalAtom = atom({ plugin: 'better-agent-messaging', key: 'arrival' } as const, null)
+const heldAtom = atom({ plugin: 'better-agent-messaging', key: 'held' } as const, [])
+// An idle notice older than this, from a teammate no longer running, is the
+// engine's late hand-over of a stopped teammate's last notice: dropped.
+const STALE_IDLE_MS = 2 * 60_000
 // How long a read arrival stays in the band; an unread one stays until it is read.
 const READ_MS = 15_000
 
@@ -62,7 +68,16 @@ let standing: Record<string, string[]> = {}
 // This process's main loop: whether a turn runs, and who sent what it has
 // not yet carried in a model request.
 let isTurnRunning = false
-let pending: string[] = []
+let pending: Delivery[] = []
+// Where the main loop's turn stands: a model request in flight, or the last
+// response asked for no tool, so no request may follow. A message arriving
+// then is held until the response shows whether another request carries it.
+let isRequesting = false
+let isLastStep = false
+let held: Delivery[] = []
+// The prompt turn.complete submitted for what no request carried, until the
+// turn it starts begins: the band keeps those messages unread until then.
+let wakePrompt: string | undefined
 // Whether this turn reached team-lead with a SendMessage (a pane teammate).
 let hasReportedThisTurn = false
 // How the lead learns the directives: its system-prompt section, or, where
@@ -230,7 +245,7 @@ async function writeStatus($: EngineInterface, turn?: TeammateStatus['turn']): P
     lastActivity: act?.lastActivity ?? now,
     hold: holds.main,
     standing: standing.main ?? [],
-    unseen: pending.length,
+    unseen: pending.length + held.length,
     updatedAt: now,
   }
   await $.fs.write(statusPath(role.team, role.name), JSON.stringify(status)).catch(() => undefined)
@@ -313,6 +328,81 @@ async function refresh($: EngineInterface, thresholds: { staleMs: number; toolSt
   return rows
 }
 
+/**
+ * Puts a team message into the running turn, where the next model request
+ * carries it, and gives the person a notice of it: the model's row is hidden
+ * from the transcript view, as every row a plugin adds for the model is.
+ */
+async function deliverNow($: EngineInterface, d: Delivery): Promise<boolean> {
+  const { from, text } = d
+  // An engine notice held behind a message goes in as the engine frames it, unannounced.
+  const isNotice = isProtocolJson(text)
+  const appended = await $.session
+    .append({ message: { type: 'user', content: [{ type: 'text', text: isNotice ? teammateFrame(from, text) : deliveryText(from, text) }] } })
+    .catch(() => undefined)
+  if (appended === undefined || appended.deny !== undefined) return false
+  if (isNotice) return true
+  await $.session
+    .append({ message: { type: 'system', content: [{ type: 'text', text: deliveryNotice(from, text) }] } })
+    .catch(() => undefined)
+  pending = [...pending, d]
+  isDirty = true
+  trace($, 'delivered', { from, length: text.length })
+  return true
+}
+
+/** Whether a held delivery is a message, not one of the engine's own notices. */
+const isMessage = (d: Delivery) => !isProtocolJson(d.text)
+
+/**
+ * Delivers the messages held for a step's end, now that another request will
+ * carry them. The engine's notices held behind them keep waiting for the turn's
+ * end, where the engine would deliver them and the person sees them drawn;
+ * `withNotices` puts them in too, unseen, for a turn the person stopped.
+ */
+async function deliverHeld($: EngineInterface, withNotices = false): Promise<void> {
+  const waiting = held
+  held = []
+  for (const d of waiting) {
+    // An append the engine refuses goes back to wait for the turn's end.
+    if ((!withNotices && !isMessage(d)) || !(await deliverNow($, d))) held = [...held, d]
+  }
+  await update($, heldAtom, () => held)
+}
+
+const colorCache = new Map<string, { mtimeMs: number; colors: Record<string, string> }>()
+
+/**
+ * A teammate's colour in its team (`blue`), as its team's config names it;
+ * none for team-lead. Read when its message arrives: a stopped teammate leaves
+ * the config.
+ */
+async function senderColor($: EngineInterface, name: string): Promise<string | undefined> {
+  let team = role.kind === 'teammate' ? role.team : undefined
+  if (team === undefined) {
+    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
+    team = agents.find(a => a.teammateId?.startsWith(`${name}@`) === true)?.teammateId?.split('@')[1]
+  }
+  if (team === undefined || home.length === 0) return undefined
+  const path = `${home}/.claude/teams/${team}/config.json`
+  try {
+    const stat = await $.fs.stat(path)
+    let cached = colorCache.get(path)
+    if (cached === undefined || cached.mtimeMs !== stat.mtimeMs) {
+      const config = JSON.parse(String(await $.fs.read(path))) as { members?: { name?: unknown; color?: unknown }[] }
+      const colors: Record<string, string> = {}
+      for (const m of config.members ?? []) {
+        if (typeof m.name === 'string' && typeof m.color === 'string') colors[m.name] = m.color
+      }
+      cached = { mtimeMs: stat.mtimeMs, colors }
+      colorCache.set(path, cached)
+    }
+    return cached.colors[name]
+  } catch {
+    return undefined
+  }
+}
+
 /** The band's arrival, read now that a model request carries it; it clears a little later. */
 async function markRead($: EngineInterface): Promise<void> {
   const arrival = await read($, arrivalAtom)
@@ -355,6 +445,7 @@ export const register: Register = (on, options) => {
     }
     // What the host kept across a reload, under anything applied before this ran.
     holds = { ...(await read($, holdsAtom)), ...holds }
+    held = [...(await read($, heldAtom)), ...held]
     standing = { ...(await read($, standingAtom)), ...standing }
     // A reload mid-turn: the turn is still running, and its next message must not wait.
     isTurnRunning = isTurnRunning || (await read($, turnAtom))
@@ -434,10 +525,31 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // A team message reaching this process's main loop while its turn runs is
-  // put in the turn now, where the engine would hold it until the turn ends.
+  // A team message reaching this process's main loop while its turn runs goes
+  // into the turn, where the engine would hold it until the turn ends: now, or
+  // once the model's response shows another request follows. In the lead, a
+  // stopped teammate's idle notice the engine hands over late is dropped.
   on('session.receive', async ($, e, next) => {
-    if (e.agentId !== undefined || !('teammate' in e.origin) || isProtocolJson(e.text)) return next(e)
+    if (e.agentId !== undefined || !('teammate' in e.origin)) return next(e)
+    if (isProtocolJson(e.text)) {
+      // Behind a held message, the engine would deliver its own notice (a
+      // teammate's idle notice, a moment after its report) first: it waits too.
+      if (isTurnRunning && held.length > 0) {
+        const from = e.origin.teammate
+        held = [...held, { from, text: e.text, color: held.find(d => d.from === from)?.color }]
+        await update($, heldAtom, () => held)
+        trace($, 'held', { from, notice: true })
+        return { consumed: 'better-agent-messaging: held behind a message held for the end of the model\'s response' }
+      }
+      const idle = idleNotice(e.text, Date.now())
+      if (idle === undefined || idle.ageMs < STALE_IDLE_MS) return next(e)
+      await ensureIdentity($)
+      if (role.kind !== 'lead') return next(e)
+      const sender = await resolveAgent($, idle.from)
+      if (sender !== undefined && LIVE.has(sender.status)) return next(e)
+      trace($, 'stale idle dropped', { from: idle.from, ageMs: idle.ageMs })
+      return { consumed: 'better-agent-messaging: a stopped teammate\'s idle notice, delivered late' }
+    }
     await ensureIdentity($)
     const from = e.origin.teammate
     if (role.kind === 'teammate' && from === 'team-lead') {
@@ -446,26 +558,31 @@ export const register: Register = (on, options) => {
       for (const rule of extractStanding(e.text)) await applyVerb($, 'main', { kind: 'standing', rule }, from)
     }
     if (!isTurnRunning) return next(e)
-    const appended = await $.session
-      .append({ message: { type: 'user', content: [{ type: 'text', text: deliveryText(from, e.text) }] } })
-      .catch(() => undefined)
-    if (appended === undefined || appended.deny !== undefined) return next(e)
-    // The person's copies: the model's row is hidden from the transcript view,
-    // so the arrival shows in the band above the prompt, and a notice keeps it
-    // in the detailed transcript (ctrl+o).
+    const delivery: Delivery = { from, text: e.text, color: await senderColor($, from) }
+    // While the model writes, whether another request follows is not known
+    // yet: the message waits for the response (turn.step), and if none
+    // follows it starts the next turn as the engine would (turn.complete).
+    const isHeld = isRequesting || isLastStep
+    if (isHeld) {
+      held = [...held, delivery]
+      await update($, heldAtom, () => held)
+      isDirty = true
+      trace($, 'held', { from, length: e.text.length })
+    } else if (!(await deliverNow($, delivery))) {
+      return next(e)
+    }
+    // The person's copy until the model reads it: the band above the prompt.
     const at = Date.now()
-    await update($, arrivalAtom, () => ({ from, text: e.text, at }))
-    await $.session
-      .append({ message: { type: 'system', content: [{ type: 'text', text: deliveryNotice(from, e.text) }] } })
-      .catch(() => undefined)
-    pending = [...pending, from]
-    isDirty = true
-    trace($, 'delivered', { from, length: e.text.length })
-    return { consumed: 'better-agent-messaging: put into the running turn' }
+    await update($, arrivalAtom, () => ({ from, text: e.text, at, color: delivery.color }))
+    return { consumed: isHeld ? 'better-agent-messaging: held for the end of the model\'s response' : 'better-agent-messaging: put into the running turn' }
   }).catch(($, e, next) => next(e))
 
   on('turn.start', async ($, e, next) => {
+    // The wake prompt's own turn: its first request carries what it held.
+    if (wakePrompt !== undefined && e.text === wakePrompt) wakePrompt = undefined
     isTurnRunning = true
+    isRequesting = false
+    isLastStep = false
     hasReportedThisTurn = false
     bump('main')
     await update($, turnAtom, () => true)
@@ -480,25 +597,63 @@ export const register: Register = (on, options) => {
 
   on('turn.step', async function* ($, e, next) {
     bump(e.agentId ?? 'main')
-    // This request carries every row appended before it.
-    if (e.agentId === undefined) {
-      pending = []
-      await markRead($)
+    if (e.agentId !== undefined) return yield* next(e)
+    // This request carries every row appended before it; a message the band
+    // shows that is still held, or waits for the wake prompt's turn, is not.
+    pending = []
+    // The last response asked for no tool and the engine went on anyway (a
+    // retry, a continuation): what waited goes in for the request after this.
+    if (held.some(isMessage)) await deliverHeld($)
+    else if (wakePrompt === undefined) await markRead($)
+    isRequesting = true
+    isLastStep = false
+    let isContinuing = false
+    try {
+      const response = yield* next(e)
+      isContinuing = response.toolUses.length > 0
+      return response
+    } finally {
+      isRequesting = false
+      // Tools run next and their results go back in another request, which
+      // carries what waited; with no tool asked for, the turn is ending.
+      if (isContinuing) {
+        if (held.some(isMessage)) await deliverHeld($)
+      } else {
+        isLastStep = true
+      }
     }
-    return yield* next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId !== undefined) return done
     isTurnRunning = false
+    isRequesting = false
+    isLastStep = false
     isDirty = true
     await update($, turnAtom, () => false)
-    const unseen = pending
+    // What no request carried starts the next turn, as the engine would have
+    // delivered it after the turn: a message held for the last response, and
+    // (rarely) one put in the conversation that the turn ended before reading,
+    // given again so the turn it starts reads it where the person sees it.
+    // A turn the person stopped stays stopped: what was held goes into the
+    // conversation, the band shows it unread, and their next prompt carries it.
+    if (e.isAborted) {
+      await deliverHeld($, true)
+      pending = []
+      held = []
+    }
+    const unread = [...pending, ...held]
+    held = []
     pending = []
-    if (unseen.length > 0 && !e.isAborted) {
-      trace($, 'nudge', { from: unseen })
-      void $.prompt.submit({ text: nudgeText(unseen) }).catch(() => undefined)
+    await update($, heldAtom, () => held)
+    if (unread.length > 0) {
+      trace($, 'wake', { from: unread.map(d => d.from) })
+      const text = wakeText(unread)
+      wakePrompt = text
+      void $.prompt.submit({ text, asUser: true }).catch(() => {
+        if (wakePrompt === text) wakePrompt = undefined
+      })
     }
     // A pane teammate whose turn ended without reaching team-lead: the lead
     // would get only the idle notice's cut copy, so the whole answer goes too.
@@ -588,20 +743,25 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const arrival = await read($, arrivalAtom)
+    const isShown = arrival !== null && (arrival.readAt === undefined || Date.now() - arrival.readAt < READ_MS)
     const lines: string[] = []
-    if (arrival !== null && (arrival.readAt === undefined || Date.now() - arrival.readAt < READ_MS)) {
-      lines.push(arrivalLine(arrival.from, arrival.text, arrival.readAt !== undefined))
-    }
     if (role.kind === 'teammate') {
       const hold = (await read($, holdsAtom)).main
       if (hold !== undefined) lines.push(heldLine(hold))
     } else {
       lines.push(...alertLines(await read($, rowsAtom), Date.now()))
     }
-    if (lines.length === 0) return next(e)
+    if (!isShown && lines.length === 0) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
+        {isShown && (
+          // The sender in its team colour, as Claude Code draws a teammate's name.
+          <Text wrap="truncate-end">
+            <Text color={arrival.color === undefined ? undefined : `${arrival.color}_FOR_SUBAGENTS_ONLY`} dimColor={arrival.color === undefined}>{arrival.from}</Text>
+            <Text dimColor>{arrivalLine(arrival.text, arrival.readAt !== undefined)}</Text>
+          </Text>
+        )}
         {lines.map(line => <Text dimColor wrap="truncate-end">{line}</Text>)}
       </Box>
     )

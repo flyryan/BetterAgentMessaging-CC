@@ -41,13 +41,13 @@ sequenceDiagram
     C->>L: "Stopped after step 4"
 ```
 
-1. The `session.receive` hook sees a team message arrive for the process's own conversation while its turn is running (`turn.start` until `turn.complete`).
-2. It appends the message to that conversation with `$.session.append`, in the engine's own `<teammate-message teammate_id="…">` form, plus a short note that it arrived mid-task and should be addressed before the task ends. The agent reads it in its next model request.
-3. It shows the arrival to the person. Claude Code hides rows a plugin adds for the model from the transcript view, so the band above the pane's prompt shows `team-lead sent (unread): <first line>` until a model request carries the message (the next `turn.step`), then `(read)` for 15 seconds. A notice that the model never reads keeps the whole message in the detailed transcript (ctrl+o), as `team-lead sent:` and the message.
-4. It answers `{ consumed }`, so the engine does not deliver the same message a second time at the end of the turn.
-5. If the turn ends before any model request carried the message (it landed during the final reply), the mod starts a short follow-up turn with `$.prompt.submit`, so the message is never left unread. A `turn.step` hook tracks which requests carried which message.
+1. The `session.receive` hook sees a team message arrive for the process's own conversation while its turn is running (`turn.start` until `turn.complete`). It answers `{ consumed }`, so the engine does not deliver the same message a second time at the end of the turn.
+2. If tools are running, another model request will follow, so the message goes in now: `$.session.append` adds it to the conversation in the engine's own `<teammate-message teammate_id="…">` form, plus a short note that it arrived mid-task and should be addressed before the task ends. The agent reads it in its next model request.
+3. If a model request is in flight, or the last response asked for no tool, whether another request follows is not known yet, so the message waits. When the response is in (`turn.step`), a response that asks for tools means another request follows, and the message goes in as in step 2.
+4. A response that asks for no tool is the turn's last. A message still waiting when the turn ends starts the next turn as the engine would have: `$.prompt.submit` with the engine's own `<teammate-message teammate_id="…" color="…">` frame and `asUser`. Claude Code draws that prompt as a teammate's message, `@ <name>❯ …` in the teammate's colour, with no plugin header, and the model reads it as one. An engine notice that arrives behind a waiting message (a teammate's idle notice comes a moment after its report) waits with it and follows it in the same prompt, in the order the engine would have delivered them. If the message goes in mid-turn instead, the notice keeps waiting and starts the next turn on its own, drawn as Claude Code draws it, as the engine would have done after the turn. A turn the person stopped (Esc) starts nothing: the waiting message goes into the conversation as in step 2, and the person's next prompt carries it.
+5. It shows the arrival to the person. Claude Code hides rows a plugin adds for the model from the transcript view, so the band above the pane's prompt shows `<name> sent (unread): <first line>`, the name in the sender's team colour, until a model request carries the message, then `(read)` for 15 seconds. A message put into the turn also gets a notice in the transcript that the model never reads, `<name> sent:` and the whole message. No render hook draws such a notice, so its name is not coloured.
 
-Whether a turn is running is kept in the host's state, so a reload of the mod mid-turn (an update) does not lose it.
+Whether a turn is running, and any message waiting for a response, are kept in the host's state, so a reload of the mod mid-turn (an update) does not lose them.
 
 When the agent is idle, the mod passes the message through and the engine wakes the agent as usual. The engine's own team notices (idle notifications, shutdown and plan requests) are JSON, and the mod always passes those through untouched.
 
@@ -111,15 +111,16 @@ flowchart LR
 
 - **Addresses.** In a pane teammate's process, `main` names the teammate itself. `session.send` readdresses `main`, `lead`, `controller` and similar names to `team-lead`. Any other name, and any name that is already right, passes unchanged.
 - **Final answers.** When a pane teammate's turn ends without a send to `team-lead`, the mod forwards the turn's whole final answer, so the lead never has to rely on the short idle notice.
+- **Late idle notices.** Claude Code sometimes leaves a stopped teammate's last idle notice, which carries its whole final answer, unread in the lead's inbox, and hands it over at the lead's next teammate spawn, hours later. The lead drops an idle notice that is more than two minutes old from a teammate that is no longer running.
 
 ## Engine events the mod hooks
 
 | Event | Used for |
 |---|---|
 | `session.start` / `session.end` | Role, restoring state after a reload, timers, the final status write |
-| `session.receive` | Mid-turn delivery, directives in pane teammates |
+| `session.receive` | Mid-turn delivery, directives in pane teammates, late idle notices |
 | `session.send` | Directives for in-process agents, broadcast, readdressing |
-| `turn.start` / `turn.step` / `turn.complete` | Turn state, which messages were read, follow-up turns, forwarding answers |
+| `turn.start` / `turn.step` / `turn.complete` | Turn state, whether a response asked for tools, which messages were read, the turn a waiting message starts, forwarding answers |
 | `tool.call` | The hold gate, liveness, the ListAgents table |
 | `agent.spawn` | Brief paragraph and standing orders, the parent chain for holds |
 | `session.compact` | Restating standing orders |

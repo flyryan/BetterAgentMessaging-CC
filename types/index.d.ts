@@ -27,7 +27,10 @@ export type TeammateStatus = {
  * The last message put into this process's running turn, shown in the band:
  * unread until a model request carries it (`readAt`), then briefly as read.
  */
-export type Arrival = { from: string; text: string; at: number; readAt?: number }
+export type Arrival = { from: string; text: string; at: number; readAt?: number; color?: string }
+
+/** A team message taken from the engine, and the sender's colour in its team. */
+export type Delivery = { from: string; text: string; color?: string }
 
 /** One agent as the lead shows it: ListAgents context, the /relay pane. */
 export type AgentRow = {
@@ -57,6 +60,12 @@ declare module 'claude-code' {
       isTurnRunning: boolean
       /** The last mid-turn arrival, or null once it has been shown long enough. */
       arrival: Arrival | null
+      /**
+       * Messages that arrived while a model request was in flight, or after the
+       * turn's last one: whether a later request carries them is known only once
+       * that request's response is in.
+       */
+      held: Delivery[]
     }
   }
 }

@@ -8,18 +8,20 @@ import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 type World = {
   sends: { to: string; text: string }[]
   submits: string[]
+  asUser: boolean[]
   spawned: string[]
   writes: Map<string, string>
   ran: { tool: string; agentId?: string }[]
+  settle: () => Promise<void>
 }
 
 const LEAD_PS = '11\tclaude --dangerously-skip-permissions\n'
 const TEAMMATE_PS = '11\t/x/claude --agent-id worker@t1 --agent-name worker --team-name t1\n'
 
-function world(on: On, opts: { ps: string; agents?: AgentInfo[] }): World {
-  const w: World = { sends: [], submits: [], spawned: [], writes: new Map(), ran: [] }
+function world(on: On, opts: { ps: string; agents?: AgentInfo[]; files?: Record<string, string> }): World {
+  const clock = mock.clock(on)
+  const w: World = { sends: [], submits: [], asUser: [], spawned: [], writes: new Map(), ran: [], settle: clock.settle }
   mock.env(on, { HOME: '/home/test' })
-  mock.clock(on)
   on('process.run', () => ({ value: { exitCode: 0, stdout: opts.ps, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('session.id', () => ({ value: 'sess-0001' }))
   on('agent.list', () => ({ value: opts.agents ?? [] }))
@@ -28,11 +30,14 @@ function world(on: On, opts: { ps: string; agents?: AgentInfo[] }): World {
     w.writes.set(e.path, e.text)
     return { value: undefined }
   })
-  on('fs.stat', () => ({ deny: 'ENOENT' }))
+  const files = opts.files ?? {}
+  on('fs.stat', ($, e) => (e.path in files ? { value: { mtimeMs: 1 } as never } : { deny: 'ENOENT' }))
+  on('fs.read', ($, e) => (e.path in files ? { value: files[e.path] as never } : { deny: 'ENOENT' }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   on('prompt.submit', ($, e) => {
     w.submits.push(e.text)
+    w.asUser.push(e.origin.kind === 'plugin' && e.origin.asUser === true)
     return { text: e.text }
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -72,6 +77,33 @@ const SEC_DEFAULT = {
     on('prompt.compose', ($, e, next) => next.to(e, 'append'))
   },
 }
+
+/**
+ * The main loop's model requests, each answered when the test says: `begin`
+ * puts one in flight, and its `finish` lets the response in, asking for `tools`.
+ */
+function steps(on: On) {
+  let finish: (tools: string[]) => void = () => undefined
+  on('turn.step', async function* (_$, e) {
+    const tools = await new Promise<string[]>(resolve => (finish = resolve))
+    return {
+      turnId: e.turnId, index: e.index, answer: tools.length > 0 ? '' : 'done',
+      toolUses: tools.map((name, i) => ({ id: `tu-${i}`, name, input: {} })),
+      stopReason: tools.length > 0 ? 'tool_use' as const : 'end_turn' as const, usage: null,
+    }
+  })
+  return {
+    begin($: Engine, turnId: string, index = 0) {
+      const stream = $.turn.step({ turnId, index, model: 'claude-opus-5-5', messageCount: 1 })
+      const drained = (async () => {
+        for await (const _chunk of stream) { /* drain */ }
+        return stream.result
+      })()
+      return { finish: async (tools: string[]) => (finish(tools), drained) }
+    },
+  }
+}
+
 const done = (turnId: string) => ({ answer: '', durationMs: 1, isAborted: false, turnId, reason: 'answer' as const })
 
 describe('a pane teammate', () => {
@@ -105,15 +137,137 @@ describe('a pane teammate', () => {
     expect(session.appended().length).toBe(0)
   })
 
-  test('starts a turn for a message that landed after its last step', async ($, on) => {
+  test('starts a turn for a message that landed after its last request', async ($, on) => {
     const w = world(on, { ps: TEAMMATE_PS })
     mock.session(on)
     await start($)
     await $.turn.start(turn('t-1'))
     await $.session.receive(fromLead('one more thing'))
     await $.turn.complete(done('t-1'))
+    // given again in the engine's own frame, drawn as the engine draws it
+    expect(w.submits).toEqual(['<teammate-message teammate_id="team-lead">\none more thing\n</teammate-message>'])
+    expect(w.asUser).toEqual([true])
+  })
+
+  test('holds a message that lands while the model writes, and puts it in when tools follow', async ($, on) => {
+    const w = world(on, { ps: TEAMMATE_PS })
+    const session = mock.session(on)
+    const model = steps(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const request = model.begin($, 't-1')
+    await w.settle()
+    const got = await $.session.receive(fromLead('stop after step 4'))
+    expect(got.consumed).toContain('held')
+    expect(session.appended().length).toBe(0)
+    await request.finish(['Bash'])
+    // the tools' results go back in another request, which carries it
+    expect(session.appended().length).toBe(2)
+    expect(JSON.stringify(session.appended()[0]?.message.content)).toContain('stop after step 4')
+    await $.turn.complete(done('t-1'))
+    expect(w.submits.length).toBe(1) // the request after the tools never ran here
+  })
+
+  test('a message that lands during the last response starts the next turn as the engine would', async ($, on) => {
+    const w = world(on, { ps: TEAMMATE_PS })
+    const session = mock.session(on)
+    const model = steps(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const request = model.begin($, 't-1')
+    await w.settle()
+    await $.session.receive(fromLead('one more thing'))
+    await request.finish([])
+    // one arriving after the last response but before the turn ends waits too
+    await $.session.receive(fromLead('and another'))
+    expect(session.appended().length).toBe(0)
+    await $.turn.complete(done('t-1'))
     expect(w.submits.length).toBe(1)
-    expect(w.submits[0]).toContain('team-lead sent you a message')
+    expect(w.asUser[0]).toBe(true)
+    expect(w.submits[0]).toBe(
+      '<teammate-message teammate_id="team-lead">\none more thing\n</teammate-message>\n'
+      + '<teammate-message teammate_id="team-lead">\nand another\n</teammate-message>',
+    )
+  })
+
+  test('an engine notice behind a held message waits with it, and the band keeps it unread until the wake turn', async ($, on) => {
+    const w = world(on, { ps: TEAMMATE_PS })
+    mock.session(on)
+    const model = steps(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const request = model.begin($, 't-1')
+    await w.settle()
+    await $.session.receive(fromLead('one more thing'))
+    const idle = '{"type":"idle_notification","from":"team-lead"}'
+    expect((await $.session.receive(fromLead(idle))).consumed).toContain('held behind')
+    await request.finish([])
+    await $.turn.complete(done('t-1'))
+    expect(w.submits).toEqual([
+      '<teammate-message teammate_id="team-lead">\none more thing\n</teammate-message>\n'
+      + `<teammate-message teammate_id="team-lead">\n${idle}\n</teammate-message>`,
+    ])
+    const band = async () => {
+      const mounted = await $.ui.mount({
+        plugin: 'better-agent-messaging', surface: 'terminal', component: 'AbovePrompt',
+        props: { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100 },
+      } as never)
+      const found = await mounted.find({ type: 'Text', text: /team-lead sent \((un)?read\)/ })
+      await mounted.unmount()
+      return found?.text
+    }
+    // another turn runs first (a prompt the person typed): still unread
+    await $.turn.start({ text: 'something else', turnId: 't-2' })
+    const second = model.begin($, 't-2')
+    await w.settle()
+    expect(await band()).toContain('(unread)')
+    await second.finish([])
+    await $.turn.complete(done('t-2'))
+    // the wake prompt's own turn carries it
+    await $.turn.start({ text: w.submits[0] ?? '', turnId: 't-3' })
+    const third = model.begin($, 't-3')
+    await w.settle()
+    expect(await band()).toContain('(read)')
+    await third.finish([])
+  })
+
+  test('with tools to follow, a held message goes in and the notice behind it waits for the turn\'s end', async ($, on) => {
+    const w = world(on, { ps: TEAMMATE_PS })
+    const session = mock.session(on)
+    const model = steps(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const request = model.begin($, 't-1')
+    await w.settle()
+    await $.session.receive(fromLead('one more thing'))
+    const idle = '{"type":"idle_notification","from":"team-lead"}'
+    await $.session.receive(fromLead(idle))
+    await request.finish(['Bash'])
+    expect(session.appended().length).toBe(2)
+    expect(JSON.stringify(session.appended())).not.toContain('idle_notification')
+    // the request after the tools carries the message
+    const after = model.begin($, 't-1', 1)
+    await w.settle()
+    await after.finish([])
+    await $.turn.complete(done('t-1'))
+    // drawn as the engine draws its notice, after the turn, as it would have
+    expect(w.submits).toEqual([`<teammate-message teammate_id="team-lead">\n${idle}\n</teammate-message>`])
+  })
+
+  test('a turn the person stopped stays stopped: what waited goes into the conversation', async ($, on) => {
+    const w = world(on, { ps: TEAMMATE_PS })
+    const session = mock.session(on)
+    const model = steps(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const request = model.begin($, 't-1')
+    await w.settle()
+    await $.session.receive(fromLead('one more thing'))
+    await request.finish([])
+    await $.turn.complete({ ...done('t-1'), isAborted: true })
+    expect(w.submits).toEqual([])
+    expect(session.appended().length).toBe(2)
+    expect(JSON.stringify(session.appended()[0]?.message.content)).toContain('one more thing')
   })
 
   test('obeys hold and release from team-lead, and no one else', async ($, on) => {
@@ -217,6 +371,38 @@ describe('the lead', () => {
   const pane: AgentInfo = {
     id: 'worker@t1', teammateId: 'worker@t1', name: 'worker', description: 'w', type: 'teammate', status: 'running',
   }
+
+  test('shows a teammate\'s mid-turn report in the band, its name in the teammate\'s colour', async ($, on) => {
+    const config = JSON.stringify({ members: [{ name: 'team-lead' }, { name: 'worker', color: 'green' }] })
+    world(on, { ps: LEAD_PS, agents: [pane], files: { '/home/test/.claude/teams/t1/config.json': config } })
+    mock.session(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const report = { origin: { kind: 'peer' as const, teammate: 'worker', isVerified: false }, text: 'tests green' }
+    expect((await $.session.receive(report)).consumed).toBeDefined()
+    const band = await $.ui.mount({
+      plugin: 'better-agent-messaging', surface: 'terminal', component: 'AbovePrompt',
+      props: { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100 },
+    } as never)
+    expect((await band.find({ type: 'Text', text: /^worker$/ }))?.props.color).toBe('green_FOR_SUBAGENTS_ONLY')
+    expect(await band.find({ type: 'Text', text: 'worker sent (unread): tests green' })).toBeDefined()
+    await band.unmount()
+  })
+
+  test('drops a stopped teammate\'s idle notice the engine hands over late, and no other', async ($, on) => {
+    const stopped: AgentInfo = { ...pane, id: 'old@t1', teammateId: 'old@t1', name: 'old', status: 'killed' }
+    world(on, { ps: LEAD_PS, agents: [pane, stopped] })
+    await start($)
+    const idle = (from: string, minutesAgo: number) => ({
+      origin: { kind: 'peer' as const, teammate: from, isVerified: false },
+      text: JSON.stringify({ type: 'idle_notification', from, timestamp: new Date(Date.now() - minutesAgo * 60_000).toISOString() }),
+    })
+    expect((await $.session.receive(idle('old', 116))).consumed).toContain('late')
+    expect((await $.session.receive(idle('gone', 116))).consumed).toContain('late')
+    // on time, or from a teammate still running: the engine's as ever
+    expect((await $.session.receive(idle('old', 0))).text).toBeDefined()
+    expect((await $.session.receive(idle('worker', 116))).text).toBeDefined()
+  })
 
   test('holds an in-process subagent in its own process, and releases it', async ($, on) => {
     world(on, { ps: LEAD_PS, agents: [sub] })

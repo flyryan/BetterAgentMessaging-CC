@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { gateVerdict, shipMatcher } from '../hooks/gate'
-import { arrivalLine, controllerAlias, deliveryNotice, deliveryText, heldLine, extractStanding, isProtocolJson, parseVerb, spawnProtocol } from '../hooks/protocol'
+import { arrivalLine, controllerAlias, deliveryNotice, deliveryText, heldLine, extractStanding, isProtocolJson, parseVerb, spawnProtocol, wakeText } from '../hooks/protocol'
 import { parseRole } from '../hooks/role'
 import { alertLines, staleness } from '../hooks/table'
 
@@ -128,11 +128,18 @@ describe('roles and rows', () => {
   })
 
   test('arrival and hold lines are one short line each', () => {
-    expect(arrivalLine('team-lead', 'hold ship: QA first\nmore detail', false)).toBe('team-lead sent (unread): hold ship: QA first')
-    expect(arrivalLine('team-lead', 'hold ship: QA first', true)).toBe('team-lead sent (read): hold ship: QA first')
-    expect(arrivalLine('impl', 'x'.repeat(300), false).length).toBeLessThan(220)
+    expect(arrivalLine('hold ship: QA first\nmore detail', false)).toBe(' sent (unread): hold ship: QA first')
+    expect(arrivalLine('hold ship: QA first', true)).toBe(' sent (read): hold ship: QA first')
+    expect(arrivalLine('x'.repeat(300), false).length).toBeLessThan(220)
     expect(heldLine({ scope: 'ship', reason: 'QA first', by: 'team-lead', at: 0 })).toBe('team-lead blocked shipping: QA first')
     expect(heldLine({ scope: 'all', reason: 'QA first', by: 'team-lead', at: 0 })).toBe('team-lead paused this agent: QA first')
+  })
+
+  test('a wake prompt is the engine\'s own frames alone, each with the sender\'s colour', () => {
+    expect(wakeText([{ from: 'impl', text: 'done: 4 files\nall green', color: 'blue' }, { from: 'team-lead', text: 'x' }])).toBe(
+      '<teammate-message teammate_id="impl" color="blue">\ndone: 4 files\nall green\n</teammate-message>\n'
+      + '<teammate-message teammate_id="team-lead">\nx\n</teammate-message>',
+    )
   })
 
   test('knows what a teammate calls its controller', () => {

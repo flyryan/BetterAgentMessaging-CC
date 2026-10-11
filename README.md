@@ -24,7 +24,7 @@ The runs behind this chart are in [docs/experiment.md](docs/experiment.md).
 - **Holds.** `hold:` blocks every tool call of an agent and of the helpers it starts. `hold ship:` blocks only pushes, merges, releases, publishing, deploys and `rm -rf`. `release` lifts either. Claude Code enforces holds; the agent does not have to comply.
 - **Standing rules.** `standing:` sets a rule that is restated to the agent after context compaction. Sent to `all`, it also goes to agents started later.
 - **Status.** A line above the prompt shows unread mid-task messages and any paused or stuck agent. `/agent-status` lists every agent, and Claude is told when an agent looks stuck.
-- **Delivery fixes.** Teammate reports addressed to `main` or `lead` are delivered to Claude, and a teammate that finishes without reporting has its whole final answer forwarded.
+- **Delivery fixes.** Teammate reports addressed to `main` or `lead` are delivered to Claude, and a teammate that finishes without reporting has its whole final answer forwarded. A stopped teammate's old idle notice, which Claude Code can hand over hours late at the next spawn, is dropped.
 
 ## Install
 
@@ -66,7 +66,7 @@ A message to `all` reaches every running or idle agent.
   <img src="docs/images/team-window.png" width="100%" alt="A tmux window with three Claude Code panes. Left, Claude as team-lead, which has just sent two messages mid-task; above its prompt one dim line reads: review can't ship: QA hasn't signed off. Top right, teammate impl, on step 4 of 8; above its prompt: team-lead sent (unread): also write DONE to impl.log after your last step. Bottom right, teammate review, on check 4; above its prompt: team-lead sent (unread): hold ship: QA hasn't signed off, and below it, team-lead blocked shipping: QA hasn't signed off.">
 </p>
 
-The line above each prompt shows what is not visible elsewhere: a mid-task message until it is read (`team-lead sent (unread): …`, then `(read)` for 15 seconds), a teammate's own hold (`team-lead blocked shipping: …`), and in Claude's pane any agent that is paused or stuck (`review can't ship: …`, `impl looks stuck: in Bash for 47m`). `team-lead` is Claude's name in its team.
+The line above each prompt shows what is not visible elsewhere: a mid-task message until it is read (`team-lead sent (unread): …`, then `(read)` for 15 seconds, the sender's name in its team colour), a teammate's own hold (`team-lead blocked shipping: …`), and in Claude's pane any agent that is paused or stuck (`review can't ship: …`, `impl looks stuck: in Bash for 47m`). `team-lead` is Claude's name in its team.
 
 <p align="center">
   <img src="docs/images/ship-hold.png" width="664" alt="Teammate review's pane. It runs git push origin main once, and the harness refuses it: Error: On a ship hold by team-lead: QA hasn't signed off. Pushing, merging, releasing, publishing, deploying and rm -rf are refused until team-lead sends release. Other work may continue. review reports the refusal and stops without retrying. Above its prompt: team-lead blocked shipping: QA hasn't signed off.">
@@ -87,7 +87,7 @@ Set in `/config` under the mod's name:
 
 ## Limitations
 
-- A message is read at the agent's next step. A command that is already running, such as a long build, finishes first.
+- A message is read at the agent's next step. A command that is already running, such as a long build, finishes first. A message that lands while the agent writes its final answer starts its next turn, drawn as Claude Code draws a teammate's message.
 - Background subagents already receive messages at their next step from Claude Code itself; for them the mod adds holds, standing rules and status only.
 - Pane teammates accept directives only from `team-lead`. The team mailbox is a file any process of the same user can write, so this guards against mistakes, not attacks.
 - `hold ship:` matches Bash command text against a pattern. It is a safety net, not a sandbox.
