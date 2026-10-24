@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { gateVerdict, shipMatcher } from '../hooks/gate'
 import { arrivalLine, controllerAlias, deliveryNotice, deliveryText, heldLine, extractStanding, isProtocolJson, parseVerb, spawnProtocol, wakeText } from '../hooks/protocol'
-import { parseRole } from '../hooks/role'
+import { homeDir, isWindows, parseRole } from '../hooks/role'
 import { alertLines, staleness } from '../hooks/table'
 
 describe('directives', () => {
@@ -78,12 +78,62 @@ describe('gate', () => {
     expect(gateVerdict(shipOnly, 'Edit', undefined, ship)).toBeUndefined()
   })
 
+  test('a full hold refuses the PowerShell tool too', () => {
+    expect(gateVerdict(all, 'PowerShell', 'Get-ChildItem', ship)).toContain('On hold by team-lead: review')
+  })
+
+  test('a ship hold refuses shipping from the PowerShell tool', () => {
+    for (const command of [
+      'git push origin main', 'git -C C:\\work\\repo push', 'git.exe push', "& 'C:\\Program Files\\Git\\cmd\\git.exe' push",
+      'gh pr merge 12 --merge', 'gh.exe pr merge 3', 'gh release create v1', 'npm publish', 'npm.cmd publish',
+      'Publish-Module -Name Kit', 'Publish-PSResource -Path .', '.\\deploy\\deploy.ps1', 'kubectl apply -f x.yaml',
+      'Remove-Item -Recurse -Force build', 'Remove-Item build -Recurse', 'Remove-Item -Path build -r', 'rm -r build',
+      'rm build -Recurse -Force', 'ri build -rec', 'del build -Recurse', 'rd build -Recurse', 'rmdir build -Recurse',
+      'cmd /c rd /s /q build', 'rd /S /Q build', 'rmdir /s build', 'del /s /q *.log',
+      'Get-ChildItem build | Remove-Item -Recurse', '[System.IO.Directory]::Delete("C:\\build", $true)',
+      'remove-item -recurse build',
+    ]) {
+      expect(gateVerdict(shipOnly, 'PowerShell', command, ship), command).toContain('ship hold')
+    }
+    for (const command of [
+      'git status', 'git commit -m x', 'npm test', 'gh pr view 3', 'Get-ChildItem -Recurse', 'Remove-Item notes.txt',
+      'Remove-Item notes.txt -Force', 'rd build', 'del notes.txt', 'Remove-ItemProperty -Path HKCU:\\x -Name y',
+      'Set-Location C:\\repo; git status', 'Copy-Item a b -Recurse',
+    ]) {
+      expect(gateVerdict(shipOnly, 'PowerShell', command, ship), command).toBeUndefined()
+    }
+  })
+
+  test('a ship hold reads PowerShell and cmd deletes run from Bash too', () => {
+    for (const command of ['pwsh -c "Remove-Item -Recurse build"', 'cmd //c "rd /s /q build"', 'rm -rf build']) {
+      expect(gateVerdict(shipOnly, 'Bash', command, ship), command).toContain('ship hold')
+    }
+  })
+
   test('a configured pattern adds to the list; a bad one leaves the list alone', () => {
     expect(shipMatcher('make\\s+release').test('make release')).toBe(true)
     expect(shipMatcher('make\\s+release').test('git push origin main')).toBe(true)
     expect(shipMatcher('make\\s+release').test('make test')).toBe(false)
     expect(shipMatcher('(').test('git push')).toBe(true)
     expect(shipMatcher('(').test('git status')).toBe(false)
+  })
+})
+
+describe('windows', () => {
+  test('is told by OS=Windows_NT alone', () => {
+    expect(isWindows('Windows_NT')).toBe(true)
+    expect(isWindows(undefined)).toBe(false)
+    expect(isWindows('Darwin')).toBe(false)
+  })
+
+  test('finds the home folder as Claude Code does', () => {
+    expect(homeDir({ home: '/Users/r' })).toBe('/Users/r')
+    expect(homeDir({ home: '/Users/r', userProfile: 'C:\\Users\\r' })).toBe('/Users/r')
+    expect(homeDir({ os: 'Windows_NT', userProfile: 'C:\\Users\\r' })).toBe('C:\\Users\\r')
+    // Git Bash's HOME is /c/Users/r, which no Windows path API reads
+    expect(homeDir({ os: 'Windows_NT', home: '/c/Users/r', userProfile: 'C:\\Users\\r' })).toBe('C:\\Users\\r')
+    expect(homeDir({ os: 'Windows_NT', home: 'C:\\Users\\r' })).toBe('C:\\Users\\r')
+    expect(homeDir({})).toBe('')
   })
 })
 

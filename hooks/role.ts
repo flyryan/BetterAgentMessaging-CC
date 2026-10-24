@@ -26,6 +26,20 @@ export const ROLE_WALK = [
   'done',
 ].join('\n')
 
+/** Windows sets `OS=Windows_NT` in every process, Git Bash's and PowerShell's alike. */
+export const isWindows = (os: string | undefined): boolean => os === 'Windows_NT'
+
+/**
+ * Where `~/.claude` lives, as Claude Code itself finds it: on Windows the
+ * profile folder (`USERPROFILE`), since `HOME` there is often unset, or Git
+ * Bash's `/c/Users/...` spelling, which no Windows path API reads; `HOME`
+ * elsewhere.
+ */
+export function homeDir(env: { os?: string; home?: string; userProfile?: string }): string {
+  const first = isWindows(env.os) ? env.userProfile || env.home : env.home
+  return first ?? ''
+}
+
 export function parseRole(stdout: string): Role {
   const chain = stdout.split('\n').filter(line => line.length > 0)
   const claude = chain.at(-1) ?? ''

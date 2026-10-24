@@ -12,17 +12,26 @@ type World = {
   spawned: string[]
   writes: Map<string, string>
   ran: { tool: string; agentId?: string }[]
+  processRuns: string[][]
   settle: () => Promise<void>
 }
 
 const LEAD_PS = '11\tclaude --dangerously-skip-permissions\n'
 const TEAMMATE_PS = '11\t/x/claude --agent-id worker@t1 --agent-name worker --team-name t1\n'
 
-function world(on: On, opts: { ps: string; agents?: AgentInfo[]; files?: Record<string, string> }): World {
+function world(
+  on: On,
+  opts: { ps: string; agents?: AgentInfo[]; files?: Record<string, string>; env?: Record<string, string> },
+): World {
   const clock = mock.clock(on)
-  const w: World = { sends: [], submits: [], asUser: [], spawned: [], writes: new Map(), ran: [], settle: clock.settle }
-  mock.env(on, { HOME: '/home/test' })
-  on('process.run', () => ({ value: { exitCode: 0, stdout: opts.ps, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const w: World = {
+    sends: [], submits: [], asUser: [], spawned: [], writes: new Map(), ran: [], processRuns: [], settle: clock.settle,
+  }
+  mock.env(on, opts.env ?? { HOME: '/home/test' })
+  on('process.run', ($, e) => {
+    w.processRuns.push([...e.argv])
+    return { value: { exitCode: 0, stdout: opts.ps, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('session.id', () => ({ value: 'sess-0001' }))
   on('agent.list', () => ({ value: opts.agents ?? [] }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
@@ -387,6 +396,42 @@ describe('the lead', () => {
     expect((await band.find({ type: 'Text', text: /^worker$/ }))?.props.color).toBe('green_FOR_SUBAGENTS_ONLY')
     expect(await band.find({ type: 'Text', text: 'worker sent (unread): tests green' })).toBeDefined()
     await band.unmount()
+  })
+
+  test('on Windows it is the lead without walking ps, and reads ~/.claude under USERPROFILE', async ($, on) => {
+    const config = JSON.stringify({ members: [{ name: 'team-lead' }, { name: 'worker', color: 'green' }] })
+    // A teammate's ps output, so a walk that ran would make this process a teammate.
+    // HOME is Git Bash's spelling; USERPROFILE stands in for C:\\Users\\test, which
+    // the engine would resolve against the cwd on the Mac or Linux box running this.
+    const w = world(on, {
+      ps: TEAMMATE_PS, agents: [pane], env: { OS: 'Windows_NT', HOME: '/c/Users/test', USERPROFILE: '/profile/test' },
+      files: { '/profile/test/.claude/teams/t1/config.json': config },
+    })
+    mock.session(on)
+    await start($)
+    await $.turn.start(turn('t-1'))
+    const report = { origin: { kind: 'peer' as const, teammate: 'worker', isVerified: false }, text: 'tests green' }
+    expect((await $.session.receive(report)).consumed).toBeDefined()
+    const band = await $.ui.mount({
+      plugin: 'better-agent-messaging', surface: 'terminal', component: 'AbovePrompt',
+      props: { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100 },
+    } as never)
+    expect((await band.find({ type: 'Text', text: /^worker$/ }))?.props.color).toBe('green_FOR_SUBAGENTS_ONLY')
+    await band.unmount()
+    expect(w.processRuns).toEqual([])
+    expect([...w.writes.keys()].some(path => path.includes('/agents/'))).toBe(false)
+  })
+
+  test('a held agent on Windows cannot push or delete from the PowerShell tool', async ($, on) => {
+    world(on, { ps: LEAD_PS, agents: [sub], env: { OS: 'Windows_NT', USERPROFILE: 'C:\\Users\\test' } })
+    await start($)
+    await $.session.send(say('a1', 'hold ship: release freeze'))
+    const ps = (command: string) => $.tool.call({ tool: 'PowerShell', command, agentId: 'a1' } as never)
+    expect((await ps('git push origin main')).deny).toContain('ship hold')
+    expect((await ps('Remove-Item -Recurse -Force build')).deny).toContain('ship hold')
+    expect((await ps('npm test')).deny).toBeUndefined()
+    await $.session.send(say('a1', 'hold: wait'))
+    expect((await ps('Get-ChildItem')).deny).toContain('On hold by main')
   })
 
   test('drops a stopped teammate\'s idle notice the engine hands over late, and no other', async ($, on) => {

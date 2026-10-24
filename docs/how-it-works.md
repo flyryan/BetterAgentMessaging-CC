@@ -70,7 +70,7 @@ The message itself is still delivered, so the agent knows why its tools are refu
 
 **Helpers are covered.** The mod records which loop spawned each agent (`agent.spawn`), and the gate looks up that chain to the nearest hold. In a pane teammate's process, every loop is the teammate's own work, so a helper whose parent is unknown (one started before a reload) still falls under the teammate's hold.
 
-**`hold ship:`** refuses Bash commands that match a pattern: `git push`, `gh pr merge`, release creation, package publishing, `kubectl`, `helm` and `terraform` changes, deploy commands and `rm -rf`. Set `shipPattern` in `/config` to refuse more commands; the built-in list still applies.
+**`hold ship:`** refuses Bash and PowerShell commands that match a pattern: `git push`, `gh pr merge`, release creation, package publishing, `kubectl`, `helm` and `terraform` changes, deploy commands and recursive deletes (`rm -rf`, and on Windows `Remove-Item -Recurse` and its aliases, `rd /s` and `del /s`). Set `shipPattern` in `/config` to refuse more commands; the built-in list still applies.
 
 **Standing orders** are stored per loop. After a compaction (`session.compact`, but not its `precompute` pass), the mod appends them to the agent's conversation again. A standing order sent to `all` is also added to the brief of every agent spawned afterwards. A pane teammate reads the standing orders in its own brief, so it can restate them after its own compaction.
 

@@ -22,7 +22,7 @@
     "shipPattern": {
       "type": "string",
       "title": "Ship actions (regex)",
-      "description": "Extra Bash commands that `hold ship:` refuses, as a regular expression. The built-in list (git push, PR merge, releases, publish, deploy, rm -rf) always applies.",
+      "description": "Extra Bash or PowerShell commands that `hold ship:` refuses, as a regular expression. The built-in list (git push, PR merge, releases, publish, deploy, rm -rf and Remove-Item -Recurse) always applies.",
       "default": ""
     },
     "trace": {
