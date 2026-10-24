@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, SessionSendResult } from 'claude-code'
 
 import type { AgentRow, Delivery, Hold, TeammateStatus } from '../types'
-import { gateVerdict, shipMatcher } from './gate'
+import { gateVerdict, SHELL_TOOLS, shipMatcher } from './gate'
 import {
   arrivalLine,
   CONTROLLER_NOTE,
@@ -24,7 +24,7 @@ import {
   type Verb,
   wakeText,
 } from './protocol'
-import { parseRole, ROLE_WALK, type Role } from './role'
+import { homeDir, isWindows, parseRole, ROLE_WALK, type Role } from './role'
 import { agentTable, alertLines, rowLine, staleness } from './table'
 import { traceLine } from './trace'
 
@@ -111,6 +111,9 @@ function trace($: EngineInterface, ev: string, data: Record<string, unknown> = {
 }
 
 async function detectRole($: EngineInterface): Promise<Role> {
+  // Windows has no `ps -o` (Git Bash's ps is MSYS's), and agent teammates run
+  // there in Claude Code's own process, never a pane: this process is the lead.
+  if (isWindows(await $.env.get('OS'))) return { kind: 'lead', chain: [] }
   try {
     const ran = await $.process.run(['sh', '-c', ROLE_WALK], { timeoutMs: 5000 })
     return parseRole(ran.stdout)
@@ -122,7 +125,11 @@ async function detectRole($: EngineInterface): Promise<Role> {
 function ensureIdentity($: EngineInterface): Promise<void> {
   identity ??= (async () => {
     role = await detectRole($)
-    home = (await $.env.get('HOME')) ?? ''
+    home = homeDir({
+      os: await $.env.get('OS'),
+      home: await $.env.get('HOME'),
+      userProfile: await $.env.get('USERPROFILE'),
+    })
     sessionId = await $.session.id()
   })()
   return identity
@@ -666,7 +673,7 @@ export const register: Register = (on, options) => {
   })
 
   const verdictFor = (agentId: string | undefined, tool: string, input: unknown) => {
-    const command = tool === 'Bash' ? (input as { command?: unknown }).command : undefined
+    const command = SHELL_TOOLS.has(tool) ? (input as { command?: unknown }).command : undefined
     return gateVerdict(holdFor(agentId), tool, typeof command === 'string' ? command : undefined, ship)
   }
   // One hook per tool call: the hold gate first (a held loop's calls are

@@ -21,7 +21,7 @@ The runs behind this chart are in [docs/experiment.md](docs/experiment.md).
 ## Features
 
 - **Mid-task delivery.** A working teammate reads a message at its next step. Teammates' reports reach Claude while it is working.
-- **Holds.** `hold:` blocks every tool call of an agent and of the helpers it starts. `hold ship:` blocks only pushes, merges, releases, publishing, deploys and `rm -rf`. `release` lifts either. Claude Code enforces holds; the agent does not have to comply.
+- **Holds.** `hold:` blocks every tool call of an agent and of the helpers it starts. `hold ship:` blocks only pushes, merges, releases, publishing, deploys and recursive deletes, from Bash or, on Windows, PowerShell. `release` lifts either. Claude Code enforces holds; the agent does not have to comply.
 - **Standing rules.** `standing:` sets a rule that is restated to the agent after context compaction. Sent to `all`, it also goes to agents started later.
 - **Status.** A line above the prompt shows unread mid-task messages and any paused or stuck agent. `/agent-status` lists every agent, and Claude is told when an agent looks stuck.
 - **Delivery fixes.** Teammate reports addressed to `main` or `lead` are delivered to Claude, and a teammate that finishes without reporting has its whole final answer forwarded. A stopped teammate's old idle notice, which Claude Code can hand over hours late at the next spawn, is dropped.
@@ -55,7 +55,7 @@ There is nothing to set up. Ask Claude in plain language, for example "hold the 
 | First line | Effect |
 |---|---|
 | `hold: <reason>` | Refuses every tool call except messaging, until `release`. |
-| `hold ship: <reason>` | Refuses `git push`, PR merges, releases, `npm publish`, deploys and `rm -rf`, until `release`. |
+| `hold ship: <reason>` | Refuses `git push`, PR merges, releases, `npm publish`, deploys and `rm -rf` (`Remove-Item -Recurse`, `rd /s` in PowerShell), until `release`. |
 | `release` or `release: <note>` | Lifts a hold. |
 | `standing: <rule>` | Keeps a rule in force across compaction. |
 | `standing clear` | Drops all standing rules. |
@@ -82,7 +82,7 @@ Set in `/config` under the mod's name:
 |---|---|---|
 | `staleMinutes` | `20` | An agent with no step and no tool for this long is reported as stuck. |
 | `toolStaleMinutes` | `45` | An agent inside one tool call for this long is reported as stuck. |
-| `shipPattern` | empty | A regular expression for more Bash commands `hold ship:` refuses. The built-in list always applies. |
+| `shipPattern` | empty | A regular expression for more Bash or PowerShell commands `hold ship:` refuses. The built-in list always applies. |
 | `trace` | `false` | Writes every decision the mod makes to `~/.claude/better-agent-messaging/trace/`. |
 
 ## Limitations
@@ -90,7 +90,7 @@ Set in `/config` under the mod's name:
 - A message is read at the agent's next step. A command that is already running, such as a long build, finishes first. A message that lands while the agent writes its final answer starts its next turn, drawn as Claude Code draws a teammate's message.
 - Background subagents already receive messages at their next step from Claude Code itself; for them the mod adds holds, standing rules and status only.
 - Pane teammates accept directives only from `team-lead`. The team mailbox is a file any process of the same user can write, so this guards against mistakes, not attacks.
-- `hold ship:` matches Bash command text against a pattern. It is a safety net, not a sandbox.
+- `hold ship:` matches Bash and PowerShell command text against a pattern. It is a safety net, not a sandbox.
 - On machines with managed settings, and on Team and Enterprise plans, Claude Code keeps installed plugins out of the system prompt. There the mod teaches Claude through a note in the conversation, which Claude reads from its second request on.
 
 ## How it works

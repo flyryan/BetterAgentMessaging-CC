@@ -1,0 +1,5 @@
+# Unix line endings on every checkout, Windows included, so Git for Windows (core.autocrlf)
+# never puts a \r into a hook module, a test or a doc. Only Windows-native launchers keep CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
